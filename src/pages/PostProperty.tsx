@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { generatePropertyDescription } from '../services/geminiService';
-import { Property, ListingType, PropertyType, ConstructionStatus, FurnishedStatus, ListedBy, Facing, ParkingType, ViewType, OwnershipType, BrokerageType } from '../types';
+import { generatePropertyDescription } from '../../services/geminiService';
+import { Property, ListingType, PropertyType, ConstructionStatus, FurnishedStatus, ListedBy, Facing, ParkingType, ViewType, OwnershipType, BrokerageType } from '../../types';
 import { Sparkles, Upload, Loader2, CheckCircle, Home, Building2, Car, Eye, ShieldCheck, Video, UserCheck, ArrowRight, TrendingUp, DollarSign, BedDouble, Ruler, ChevronDown, Plus, Check, Info, FileText } from 'lucide-react';
 
 interface PostPropertyProps {

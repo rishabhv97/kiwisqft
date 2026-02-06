@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lead } from '../../types';
+import { Lead } from '../../../types';
 import { Phone, Mail } from 'lucide-react';
 
 const LeadCard: React.FC<{ lead: Lead }> = ({ lead }) => (
