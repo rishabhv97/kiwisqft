@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../supabaseClient';
 import { Lead } from '../../types';
-import { Phone, Mail } from 'lucide-react';
+import { Phone, Mail, Calendar, User, Loader2, MessageSquare } from 'lucide-react';
 
 const LeadCard: React.FC<{ lead: Lead }> = ({ lead }) => (
     <div className="bg-white p-4 rounded-lg border border-gray-100 hover:shadow-md transition-shadow">
@@ -18,56 +19,90 @@ const LeadCard: React.FC<{ lead: Lead }> = ({ lead }) => (
                 'bg-yellow-100 text-yellow-700'
             }`}>{lead.status}</span>
         </div>
-        <div className="space-y-1 text-sm text-gray-500 mb-3">
+        
+        <div className="space-y-2 text-sm text-gray-500 mb-3">
             <div className="flex items-center gap-2"><Phone size={14}/> {lead.phone}</div>
-            <div className="flex items-center gap-2"><Mail size={14}/> {lead.email}</div>
+            {lead.email && <div className="flex items-center gap-2"><Mail size={14}/> {lead.email}</div>}
+            <div className="flex items-center gap-2"><Calendar size={14}/> {new Date(lead.date).toLocaleDateString()}</div>
+            {/* Show Property ID if available */}
+            {lead.propertyId && (
+                <div className="text-xs bg-gray-50 p-1.5 rounded border border-gray-200 mt-1 truncate">
+                    Property ID: {lead.propertyId.slice(0,8)}...
+                </div>
+            )}
         </div>
+
         <div className="flex gap-2 border-t border-gray-100 pt-3">
-             <button className="flex-1 py-1.5 text-xs font-bold bg-brand-green text-white rounded hover:bg-emerald-800">Call Now</button>
-             <button className="flex-1 py-1.5 text-xs font-bold bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50">View Details</button>
+             <a href={`tel:${lead.phone}`} className="flex-1 py-1.5 text-center text-xs font-bold bg-brand-green text-white rounded hover:bg-emerald-800">
+                Call
+             </a>
+             <button className="flex-1 py-1.5 text-xs font-bold bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50">
+                Details
+             </button>
         </div>
     </div>
 );
 
 const AdminPeople: React.FC = () => {
-  // MOCK DATA
-  const [leads] = useState<Lead[]>([
-    { id: '1', name: 'Rahul Sharma', phone: '+91 9876543210', email: 'rahul@test.com', interest: 'Buy', source: 'Website', status: 'New', date: '2023-10-24' },
-    { id: '2', name: 'Priya Singh', phone: '+91 9876543211', email: 'priya@test.com', interest: 'Rent', source: 'Instagram', status: 'Contacted', date: '2023-10-23' },
-    { id: '3', name: 'Amit Verma', phone: '+91 9876543212', email: 'amit@test.com', interest: 'Sell', source: 'Referral', status: 'Closed', date: '2023-10-20' },
-    { id: '4', name: 'Sneha Gupta', phone: '+91 9876543213', email: 'sneha@test.com', interest: 'Buy', source: 'Ads', status: 'Follow-up', date: '2023-10-25' },
-  ]);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchLeads();
+  }, []);
+
+  const fetchLeads = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        // Map DB to Types
+        const mappedLeads: Lead[] = data.map((l: any) => ({
+            id: l.id,
+            name: l.buyer_name,
+            phone: l.buyer_phone,
+            email: l.buyer_email || '',
+            propertyId: l.property_id,
+            interest: 'Buy', // Default to Buy for now
+            source: 'Website',
+            status: 'New', // Default status
+            date: l.created_at,
+            assignedAgent: '',
+            notes: l.message
+        }));
+        setLeads(mappedLeads);
+      }
+    } catch (error) {
+        console.error("Error loading leads:", error);
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-brand-green"/></div>;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4 border-b border-gray-200 pb-2">
+      <div className="flex items-center justify-between border-b border-gray-200 pb-4">
          <h1 className="text-2xl font-bold text-gray-900">Lead Management</h1>
+         <span className="bg-brand-green text-white px-3 py-1 rounded-full text-sm font-bold">{leads.length} Total</span>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Column 1: New */}
-            <div className="bg-gray-50 p-4 rounded-xl">
-                <h3 className="font-bold text-gray-700 mb-4 flex justify-between">New Leads <span className="bg-white px-2 rounded-full text-xs py-0.5 border">2</span></h3>
-                <div className="space-y-3">
-                    {leads.filter(l => l.status === 'New').map(lead => <LeadCard key={lead.id} lead={lead} />)}
-                    <div className="p-3 bg-white border border-dashed border-gray-300 rounded text-center text-xs text-gray-400 cursor-pointer hover:border-brand-green hover:text-brand-green">+ Add Manual Lead</div>
-                </div>
-            </div>
-                {/* Column 2: Contacted */}
-                <div className="bg-gray-50 p-4 rounded-xl">
-                <h3 className="font-bold text-gray-700 mb-4 flex justify-between">In Progress <span className="bg-white px-2 rounded-full text-xs py-0.5 border">1</span></h3>
-                <div className="space-y-3">
-                    {leads.filter(l => l.status === 'Contacted' || l.status === 'Follow-up').map(lead => <LeadCard key={lead.id} lead={lead} />)}
-                </div>
-            </div>
-                {/* Column 3: Closed */}
-                <div className="bg-gray-50 p-4 rounded-xl opacity-80">
-                <h3 className="font-bold text-gray-700 mb-4 flex justify-between">Closed <span className="bg-white px-2 rounded-full text-xs py-0.5 border">1</span></h3>
-                <div className="space-y-3">
-                    {leads.filter(l => l.status === 'Closed').map(lead => <LeadCard key={lead.id} lead={lead} />)}
-                </div>
-            </div>
+      {leads.length === 0 ? (
+          <div className="text-center py-20 bg-gray-50 rounded-xl border border-dashed">
+              <MessageSquare className="mx-auto text-gray-300 mb-2" size={40} />
+              <p className="text-gray-500">No leads found yet.</p>
+          </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {leads.map(lead => <LeadCard key={lead.id} lead={lead} />)}
         </div>
+      )}
     </div>
   );
 };

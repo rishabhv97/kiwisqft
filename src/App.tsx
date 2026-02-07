@@ -134,7 +134,7 @@ const App: React.FC = () => {
         <Routes>
           {/* Public Routes */}
           {/* Home still needs props because it renders Featured items immediately */}
-          <Route path="/" element={<Home featuredProperties={properties.filter(p => p.isFeatured && p.status === 'Approved')} />} />
+          <Route path="/" element={<Home featuredProperties={properties.filter(p => p.status === 'Approved')} />} />
           
           {/* Listings now fetch their own data, so we removed the 'properties' prop */}
           <Route path="/buy" element={<Listings type="sale" />} />

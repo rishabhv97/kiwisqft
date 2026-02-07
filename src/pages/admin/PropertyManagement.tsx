@@ -1,7 +1,7 @@
-
 import React, { useState } from 'react';
+import { supabase } from '../../supabaseClient'; // Import Supabase
 import { Property, PropertyStatus } from '../../types';
-import { Check, X, Eye, Trash2, ShieldCheck, FileText, PlusCircle, AlertTriangle } from 'lucide-react';
+import { Check, X, Eye, Trash2, ShieldCheck, FileText, PlusCircle, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
 interface PropertyManagementProps {
@@ -13,20 +13,54 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
   const navigate = useNavigate();
   const [filter, setFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected' | 'Sold'>('All');
   const [selectedProp, setSelectedProp] = useState<Property | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null); // To show loading state
 
-  const handleStatusChange = (id: string, newStatus: PropertyStatus, isVerified: boolean) => {
-    setProperties(prev => prev.map(p => 
-        p.id === id ? { ...p, status: newStatus, isVerified: isVerified } : p
-    ));
-    if (selectedProp?.id === id) {
-        setSelectedProp(prev => prev ? { ...prev, status: newStatus, isVerified: isVerified } : null);
+  const handleStatusChange = async (id: string, newStatus: PropertyStatus, isVerified: boolean) => {
+    setProcessingId(id);
+    try {
+        // 1. Update Database
+        const { error } = await supabase
+            .from('properties')
+            .update({ status: newStatus, is_verified: isVerified })
+            .eq('id', id);
+
+        if (error) throw error;
+
+        // 2. Update UI
+        setProperties(prev => prev.map(p => 
+            p.id === id ? { ...p, status: newStatus, isVerified: isVerified } : p
+        ));
+        
+        if (selectedProp?.id === id) {
+            setSelectedProp(prev => prev ? { ...prev, status: newStatus, isVerified: isVerified } : null);
+        }
+    } catch (err) {
+        console.error("Error updating status:", err);
+        alert("Failed to update status.");
+    } finally {
+        setProcessingId(null);
     }
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to delete this listing? This action cannot be undone.")) {
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this listing? This action cannot be undone.")) return;
+    
+    setProcessingId(id);
+    try {
+      // 1. Delete from Database
+      const { error } = await supabase.from('properties').delete().eq('id', id);
+      if (error) throw error;
+
+      // 2. Update UI
       setProperties(prev => prev.filter(p => p.id !== id));
       if (selectedProp?.id === id) setSelectedProp(null);
+      alert("Property deleted successfully.");
+
+    } catch (err: any) {
+      console.error("Error deleting property:", err);
+      alert("Failed to delete property. Check if it has related data.");
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -80,10 +114,10 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
                             <tr key={p.id} className={`hover:bg-gray-50 cursor-pointer ${selectedProp?.id === p.id ? 'bg-blue-50/50' : ''}`} onClick={() => setSelectedProp(p)}>
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-3">
-                                        <img src={p.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover" />
+                                        <img src={p.images?.[0] || 'https://via.placeholder.com/150'} alt="" className="w-12 h-12 rounded-lg object-cover" />
                                         <div>
                                             <p className="font-bold text-gray-900 line-clamp-1">{p.title}</p>
-                                            <p className="text-xs text-gray-500">ID: {p.id} • ₹{p.price.toLocaleString()}</p>
+                                            <p className="text-xs text-gray-500">ID: {p.id.slice(0,8)}... • ₹{p.price.toLocaleString()}</p>
                                         </div>
                                     </div>
                                 </td>
@@ -104,9 +138,11 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
                                 <td className="px-6 py-4 text-right">
                                     <button 
                                         onClick={(e) => {e.stopPropagation(); handleDelete(p.id);}}
-                                        className="p-2 rounded hover:bg-red-100 text-red-600" title="Delete"
+                                        disabled={processingId === p.id}
+                                        className="p-2 rounded hover:bg-red-100 text-red-600 disabled:opacity-50" 
+                                        title="Delete"
                                     >
-                                        <Trash2 size={16} />
+                                        {processingId === p.id ? <Loader2 size={16} className="animate-spin"/> : <Trash2 size={16} />}
                                     </button>
                                 </td>
                             </tr>
@@ -128,7 +164,7 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
                         <button onClick={() => setSelectedProp(null)}><X size={20} className="text-gray-400" /></button>
                     </div>
 
-                    <img src={selectedProp.imageUrl} className="w-full h-40 object-cover rounded-lg mb-4" />
+                    <img src={selectedProp.images?.[0]} className="w-full h-40 object-cover rounded-lg mb-4" />
                     <div className="mb-4">
                         <h3 className="font-bold text-gray-800 line-clamp-2">{selectedProp.title}</h3>
                         <p className="text-sm text-gray-500">{selectedProp.location}, {selectedProp.city}</p>
@@ -145,24 +181,26 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
                         <div className="grid grid-cols-2 gap-3">
                             <button 
                                 onClick={() => handleStatusChange(selectedProp.id, 'Approved', true)}
+                                disabled={processingId === selectedProp.id}
                                 className={`py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 border transition-all ${
                                     selectedProp.status === 'Approved' 
                                     ? 'bg-green-600 text-white border-green-600' 
                                     : 'bg-white text-green-600 border-green-200 hover:bg-green-50'
                                 }`}
                             >
-                                <Check size={16} /> Approve
+                                {processingId === selectedProp.id ? <Loader2 size={16} className="animate-spin"/> : <Check size={16} />} Approve
                             </button>
                             
                             <button 
                                 onClick={() => handleStatusChange(selectedProp.id, 'Rejected', false)}
+                                disabled={processingId === selectedProp.id}
                                 className={`py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 border transition-all ${
                                     selectedProp.status === 'Rejected' 
                                     ? 'bg-red-600 text-white border-red-600' 
                                     : 'bg-white text-red-600 border-red-200 hover:bg-red-50'
                                 }`}
                             >
-                                <X size={16} /> Reject
+                                {processingId === selectedProp.id ? <Loader2 size={16} className="animate-spin"/> : <X size={16} />} Reject
                             </button>
                         </div>
 

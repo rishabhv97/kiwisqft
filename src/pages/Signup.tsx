@@ -110,7 +110,7 @@ const Signup: React.FC = () => {
               onChange={handleChange} value={formData.role}>
               <option value="Buyer">I want to Buy/Rent</option>
               <option value="Seller">I want to Sell/Lease</option>
-              <option value="Broker">I am a Real Estate Agent</option>
+              
             </select>
           </div>
 

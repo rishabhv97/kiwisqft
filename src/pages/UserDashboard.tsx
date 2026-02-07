@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { Property } from '../types';
 import { Link } from 'react-router-dom';
-import { Trash2, MessageSquare, Home, Calendar, Phone, Mail, Loader2 } from 'lucide-react';
+import { Trash2, MessageSquare, Home, Calendar, Phone, Mail, Loader2, AlertCircle } from 'lucide-react';
 
 interface Lead {
   id: string;
@@ -13,7 +13,6 @@ interface Lead {
   message: string;
   created_at: string;
   property_id: string;
-  // We will manually map the property title later
   property_title?: string; 
 }
 
@@ -43,7 +42,6 @@ const UserDashboard: React.FC = () => {
       setMyProperties(props as any || []);
 
       // 2. Fetch My Leads
-      // Note: We are fetching ALL leads where I am the seller
       const { data: leads, error: leadError } = await supabase
         .from('leads')
         .select('*')
@@ -53,7 +51,6 @@ const UserDashboard: React.FC = () => {
       if (leadError) throw leadError;
 
       // 3. Map Property Titles to Leads
-      // (Since we have the property list 'props', we can just look up the titles)
       const formattedLeads = (leads || []).map((lead: any) => {
         const relatedProperty = props?.find(p => p.id === lead.property_id);
         return {
@@ -71,23 +68,39 @@ const UserDashboard: React.FC = () => {
     }
   };
 
-  const handleDeleteProperty = async (id: string) => {
+  const handleDeleteProperty = async (property: Property) => {
     if (!confirm("Are you sure you want to delete this property? This cannot be undone.")) return;
 
     try {
-      const { error } = await supabase.from('properties').delete().eq('id', id);
+      // 1. Delete Images from Storage (Optional, but good for cleanup)
+      if (property.images && property.images.length > 0) {
+          const filesToRemove = property.images.map(url => {
+              const path = url.split('property-images/')[1]; // Extract path after bucket name
+              return path;
+          }).filter(Boolean);
+
+          if (filesToRemove.length > 0) {
+              await supabase.storage.from('property-images').remove(filesToRemove);
+          }
+      }
+
+      // 2. Delete Record from Database
+      // Note: Leads will be auto-deleted if you ran the SQL CASCADE command.
+      const { error } = await supabase.from('properties').delete().eq('id', property.id);
+      
       if (error) throw error;
       
-      // Remove from UI
-      setMyProperties(prev => prev.filter(p => p.id !== id));
-      alert("Property deleted.");
-    } catch (err) {
-      alert("Error deleting property.");
-      console.error(err);
+      // 3. Update UI
+      setMyProperties(prev => prev.filter(p => p.id !== property.id));
+      alert("Property deleted successfully.");
+
+    } catch (err: any) {
+      alert(`Error deleting property: ${err.message}`);
+      console.error("Delete error:", err);
     }
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center text-brand-green font-bold">Loading Dashboard...</div>;
+  if (loading) return <div className="h-screen flex items-center justify-center text-brand-green font-bold"><Loader2 className="animate-spin mr-2"/> Loading Dashboard...</div>;
 
   return (
     <div className="min-h-screen bg-stone-50 py-10 px-4">
@@ -126,14 +139,18 @@ const UserDashboard: React.FC = () => {
             {myProperties.length > 0 ? myProperties.map(property => (
               <div key={property.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group hover:shadow-md transition">
                  <div className="h-40 overflow-hidden relative">
-                    <img src={property.imageUrl} alt={property.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-                    <div className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-bold text-white ${property.status === 'Approved' ? 'bg-green-500' : 'bg-yellow-500'}`}>
+                    <img 
+                        src={property.images?.[0] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=500&q=60'} 
+                        alt={property.title} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-500" 
+                    />
+                    <div className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-bold text-white ${property.status === 'Approved' ? 'bg-green-500' : property.status === 'Pending' ? 'bg-yellow-500' : 'bg-red-500'}`}>
                       {property.status}
                     </div>
                  </div>
                  <div className="p-5 flex-grow">
                     <h3 className="font-bold text-gray-800 mb-1 truncate">{property.title}</h3>
-                    <p className="text-sm text-gray-500 mb-4">{property.location}</p>
+                    <p className="text-sm text-gray-500 mb-4 truncate">{property.location}</p>
                     <div className="flex items-center justify-between text-sm font-bold">
                        <span className="text-brand-green">₹ {(property.price / 100000).toFixed(1)} L</span>
                        <span className="text-gray-400">{new Date(property.datePosted).toLocaleDateString()}</span>
@@ -143,7 +160,11 @@ const UserDashboard: React.FC = () => {
                     <Link to={`/property/${property.id}`} className="flex-1 text-center py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50">
                        View
                     </Link>
-                    <button onClick={() => handleDeleteProperty(property.id)} className="p-2 bg-red-50 text-red-600 rounded-lg border border-red-100 hover:bg-red-100">
+                    <button 
+                        onClick={() => handleDeleteProperty(property)} 
+                        className="p-2 bg-red-50 text-red-600 rounded-lg border border-red-100 hover:bg-red-100 transition-colors"
+                        title="Delete Property"
+                    >
                        <Trash2 size={18} />
                     </button>
                  </div>
@@ -189,9 +210,13 @@ const UserDashboard: React.FC = () => {
                      <p className="text-xs text-gray-500 font-bold uppercase mb-2">Interested In</p>
                      <div className="flex items-center gap-3">
                         <div className="p-2 bg-white rounded-lg text-brand-green shadow-sm"><Home size={20}/></div>
-                        <Link to={`/property/${lead.property_id}`} className="font-bold text-sm text-gray-800 hover:underline line-clamp-2">
-                           {lead.property_title}
-                        </Link>
+                        {lead.property_id ? (
+                            <Link to={`/property/${lead.property_id}`} className="font-bold text-sm text-gray-800 hover:underline line-clamp-2">
+                                {lead.property_title}
+                            </Link>
+                        ) : (
+                            <span className="text-sm text-gray-400 italic">Property Deleted</span>
+                        )}
                      </div>
                   </div>
                </div>

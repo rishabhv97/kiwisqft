@@ -1,55 +1,85 @@
-import React, { useState } from 'react';
-import { User, Lock, Bell, Shield, LogOut, Camera, ChevronRight, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Lock, Bell, Shield, LogOut, Camera, ChevronRight, Check, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext'; // Import Auth
+import { supabase } from '../supabaseClient'; // Import Supabase
 
 type SettingsTab = 'profile' | 'security' | 'notifications' | 'privacy';
 
 const Settings: React.FC = () => {
   const navigate = useNavigate();
+  const { user: authUser, signOut } = useAuth(); // Get actual user
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [isSaving, setIsSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Mock User State
-  const [user, setUser] = useState({
-    name: 'John Doe',
-    email: 'john.doe@example.com',
-    phone: '+91 98765 43210',
-    bio: 'Real estate enthusiast and property investor.',
+  // Dynamic User State
+  const [profile, setProfile] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    bio: '',
     avatar: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?ixlib=rb-4.0.3&auto=format&fit=crop&w=256&q=80',
-    twoFactor: true,
-    notifications: {
-        email: true,
-        push: false,
-        sms: true,
-        promos: false
-    },
-    privacy: {
-        profileVisible: true,
-        showActivity: false
-    }
+    companyName: ''
   });
 
-  const handleSave = () => {
+  // Load Data
+  useEffect(() => {
+    if (authUser) {
+        setProfile({
+            name: authUser.name || '',
+            email: authUser.email || '',
+            phone: authUser.phone || '',
+            bio: '', // Add bio column to DB if needed
+            avatar: authUser.role === 'Admin' 
+                ? 'https://ui-avatars.com/api/?name=Admin&background=0D8ABC&color=fff' 
+                : 'https://ui-avatars.com/api/?name=' + authUser.name,
+            companyName: ''
+        });
+        setLoading(false);
+    }
+  }, [authUser]);
+
+  const handleSave = async () => {
+    if (!authUser) return;
     setIsSaving(true);
-    // Simulate API call
-    setTimeout(() => {
-        setIsSaving(false);
+    
+    try {
+        // Update Supabase 'profiles' table
+        const { error } = await supabase
+            .from('profiles')
+            .update({
+                name: profile.name,
+                phone: profile.phone,
+                // Add other fields if they exist in your DB schema
+            })
+            .eq('id', authUser.id);
+
+        if (error) throw error;
         alert('Settings saved successfully!');
-    }, 1000);
+        
+    } catch (err) {
+        console.error("Error updating profile:", err);
+        alert("Failed to save settings.");
+    } finally {
+        setIsSaving(false);
+    }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if(window.confirm('Are you sure you want to log out?')) {
-        navigate('/');
+        await signOut();
+        navigate('/login');
     }
   };
 
   const menuItems = [
     { id: 'profile', label: 'Profile Management', icon: User },
-    { id: 'security', label: 'Password & Security', icon: Lock },
-    { id: 'notifications', label: 'Notification Preferences', icon: Bell },
-    { id: 'privacy', label: 'Privacy Settings', icon: Shield },
+    // Only show relevant tabs
+    { id: 'security', label: 'Security', icon: Lock },
   ];
+
+  if (loading) return <div className="p-10 flex justify-center"><Loader2 className="animate-spin text-brand-green"/></div>;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 pt-8">
@@ -57,7 +87,7 @@ const Settings: React.FC = () => {
         
         <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Settings & Profile</h1>
-            <p className="text-gray-500 mt-1">Manage your account settings and preferences.</p>
+            <p className="text-gray-500 mt-1">Manage your account settings as {authUser?.role}.</p>
         </div>
 
         <div className="flex flex-col md:flex-row gap-8">
@@ -108,11 +138,8 @@ const Settings: React.FC = () => {
                             
                             <div className="flex flex-col md:flex-row gap-8 mb-8 items-start">
                                 <div className="relative group cursor-pointer self-center md:self-start">
-                                    <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg">
-                                        <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
-                                    </div>
-                                    <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <Camera className="text-white" size={20} />
+                                    <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gray-100">
+                                        <img src={profile.avatar} alt="Profile" className="w-full h-full object-cover" />
                                     </div>
                                 </div>
                                 <div className="flex-1 w-full space-y-4">
@@ -121,8 +148,8 @@ const Settings: React.FC = () => {
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                                             <input 
                                                 type="text" 
-                                                value={user.name} 
-                                                onChange={(e) => setUser({...user, name: e.target.value})}
+                                                value={profile.name} 
+                                                onChange={(e) => setProfile({...profile, name: e.target.value})}
                                                 className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-green outline-none" 
                                             />
                                         </div>
@@ -130,8 +157,8 @@ const Settings: React.FC = () => {
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
                                             <input 
                                                 type="tel" 
-                                                value={user.phone}
-                                                onChange={(e) => setUser({...user, phone: e.target.value})}
+                                                value={profile.phone}
+                                                onChange={(e) => setProfile({...profile, phone: e.target.value})}
                                                 className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-green outline-none" 
                                             />
                                         </div>
@@ -140,181 +167,37 @@ const Settings: React.FC = () => {
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                                         <input 
                                             type="email" 
-                                            value={user.email}
-                                            onChange={(e) => setUser({...user, email: e.target.value})}
-                                            className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-green outline-none bg-gray-50" 
+                                            value={profile.email}
+                                            disabled
+                                            className="w-full p-2.5 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed" 
                                         />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
-                                        <textarea 
-                                            rows={3} 
-                                            value={user.bio}
-                                            onChange={(e) => setUser({...user, bio: e.target.value})}
-                                            className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-green outline-none" 
-                                        />
+                                        <p className="text-xs text-gray-400 mt-1">Email cannot be changed.</p>
                                     </div>
                                 </div>
+                            </div>
+                            
+                            {/* SAVE BUTTON */}
+                            <div className="mt-10 pt-6 border-t border-gray-100 flex justify-end">
+                                <button 
+                                    onClick={handleSave}
+                                    disabled={isSaving}
+                                    className="bg-brand-green text-white px-8 py-3 rounded-lg font-bold hover:bg-emerald-800 transition-colors shadow-lg shadow-brand-green/20 flex items-center gap-2"
+                                >
+                                    {isSaving ? <Loader2 className="animate-spin" /> : <Check size={18} />}
+                                    {isSaving ? 'Saving...' : 'Save Changes'}
+                                </button>
                             </div>
                         </div>
                     )}
 
-                    {/* PASSWORD & SECURITY */}
+                    {/* SECURITY (Mock for now, as Supabase handles auth externally mostly) */}
                     {activeTab === 'security' && (
-                        <div>
-                            <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                                <Lock className="text-brand-green" /> Password & Security
-                            </h2>
-
-                            <div className="space-y-6 max-w-2xl">
-                                <div>
-                                    <h3 className="text-md font-semibold text-gray-900 mb-4">Change Password</h3>
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
-                                            <input type="password" placeholder="••••••••" className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-green outline-none" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-                                            <input type="password" placeholder="••••••••" className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-green outline-none" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-                                            <input type="password" placeholder="••••••••" className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-green outline-none" />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="border-t border-gray-100 pt-6">
-                                    <h3 className="text-md font-semibold text-gray-900 mb-4">Two-Factor Authentication</h3>
-                                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
-                                        <div>
-                                            <p className="font-medium text-gray-800">Secure your account</p>
-                                            <p className="text-sm text-gray-500">Require a code when signing in from a new device.</p>
-                                        </div>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input 
-                                                type="checkbox" 
-                                                className="sr-only peer" 
-                                                checked={user.twoFactor} 
-                                                onChange={() => setUser({...user, twoFactor: !user.twoFactor})}
-                                            />
-                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-green"></div>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
+                        <div className="text-center py-10">
+                            <Lock size={48} className="mx-auto text-gray-300 mb-4" />
+                            <h3 className="text-lg font-bold text-gray-700">Security Settings</h3>
+                            <p className="text-gray-500">Password reset is handled via your login provider.</p>
                         </div>
                     )}
-
-                    {/* NOTIFICATIONS */}
-                    {activeTab === 'notifications' && (
-                         <div>
-                            <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                                <Bell className="text-brand-green" /> Notification Preferences
-                            </h2>
-
-                            <div className="space-y-4 max-w-2xl">
-                                {[
-                                    { key: 'email', title: 'Email Notifications', desc: 'Receive updates on your property listings via email.' },
-                                    { key: 'push', title: 'Push Notifications', desc: 'Get real-time alerts on your browser or mobile device.' },
-                                    { key: 'sms', title: 'SMS Alerts', desc: 'Get important messages directly to your phone number.' },
-                                    { key: 'promos', title: 'Marketing & Promotions', desc: 'Receive offers, newsletters and survey requests.' }
-                                ].map((item) => (
-                                    <div key={item.key} className="flex items-start justify-between p-4 border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors">
-                                        <div>
-                                            <p className="font-medium text-gray-800">{item.title}</p>
-                                            <p className="text-sm text-gray-500">{item.desc}</p>
-                                        </div>
-                                        <div className="flex items-center h-5">
-                                            <input
-                                                type="checkbox"
-                                                checked={(user.notifications as any)[item.key]}
-                                                onChange={() => setUser({
-                                                    ...user, 
-                                                    notifications: { 
-                                                        ...user.notifications, 
-                                                        [item.key]: !(user.notifications as any)[item.key] 
-                                                    }
-                                                })}
-                                                className="w-4 h-4 text-brand-green border-gray-300 rounded focus:ring-brand-green accent-brand-green"
-                                            />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* PRIVACY */}
-                    {activeTab === 'privacy' && (
-                        <div>
-                            <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                                <Shield className="text-brand-green" /> Privacy Settings
-                            </h2>
-
-                            <div className="space-y-6 max-w-2xl">
-                                <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg mb-6">
-                                    <p className="text-sm text-blue-800">
-                                        <strong>Note:</strong> Your contact details are shared only with verified agents or sellers when you explicitly show interest in a property.
-                                    </p>
-                                </div>
-
-                                <div className="space-y-6">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="font-medium text-gray-800">Public Profile</p>
-                                            <p className="text-sm text-gray-500">Allow others to see your profile and listed properties.</p>
-                                        </div>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input 
-                                                type="checkbox" 
-                                                className="sr-only peer" 
-                                                checked={user.privacy.profileVisible} 
-                                                onChange={() => setUser({...user, privacy: {...user.privacy, profileVisible: !user.privacy.profileVisible}})}
-                                            />
-                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-green"></div>
-                                        </label>
-                                    </div>
-
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="font-medium text-gray-800">Show Activity Status</p>
-                                            <p className="text-sm text-gray-500">Let others see when you were last active.</p>
-                                        </div>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input 
-                                                type="checkbox" 
-                                                className="sr-only peer" 
-                                                checked={user.privacy.showActivity} 
-                                                onChange={() => setUser({...user, privacy: {...user.privacy, showActivity: !user.privacy.showActivity}})}
-                                            />
-                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-green"></div>
-                                        </label>
-                                    </div>
-
-                                    <div className="pt-4 border-t border-gray-100">
-                                        <button className="text-red-600 text-sm font-semibold hover:underline">
-                                            Request Account Deletion
-                                        </button>
-                                        <p className="text-xs text-gray-500 mt-1">Permanently remove your account and all associated data.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* SAVE BUTTON */}
-                    <div className="mt-10 pt-6 border-t border-gray-100 flex justify-end">
-                        <button 
-                            onClick={handleSave}
-                            disabled={isSaving}
-                            className="bg-brand-green text-white px-8 py-3 rounded-lg font-bold hover:bg-emerald-800 transition-colors shadow-lg shadow-brand-green/20 flex items-center gap-2"
-                        >
-                            {isSaving ? 'Saving...' : 'Save Changes'}
-                            {!isSaving && <Check size={18} />}
-                        </button>
-                    </div>
 
                 </div>
             </div>

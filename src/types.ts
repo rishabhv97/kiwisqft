@@ -32,7 +32,7 @@ export interface Property {
   type: PropertyType;
   listingType: ListingType;
   
-  // --- CHANGED: Support multiple images ---
+  // --- UPDATED: Support multiple images ---
   images: string[]; 
   
   // Room Details
@@ -41,7 +41,7 @@ export interface Property {
   balconies?: number; 
   
   // Area Details
-  area: number; // Primary display area (usually Super Built-up)
+  area: number; // Primary display area
   carpetArea?: number; 
   builtUpArea?: number; 
   superBuiltUpArea?: number; 
@@ -57,22 +57,22 @@ export interface Property {
   furnishedStatus?: FurnishedStatus;
   listedBy?: ListedBy;
   ownershipType?: OwnershipType;
-  facing?: Facing; // Entry Facing
-  exitFacing?: Facing; // Exit Facing for Vaastu
+  facing?: Facing; 
+  exitFacing?: Facing; 
   floor?: number;
   totalFloors?: number;
   reraApproved?: boolean;
   parkingSpaces?: number;
   yearBuilt?: number;
   
-  // Extra Room Arrays
+  // Extra Arrays
   additionalRooms?: string[]; 
   
   // Price Details
   priceNegotiable?: boolean; 
   allInclusivePrice?: boolean; 
   taxExcluded?: boolean; 
-  pricePerSqft?: number; // Added for calculation
+  pricePerSqft?: number; 
   
   // Brokerage
   brokerageType?: BrokerageType; 
