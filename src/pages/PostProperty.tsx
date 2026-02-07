@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { PropertyType, ListingType, OwnershipType, ConstructionStatus, FurnishedStatus, Facing, ParkingType, ViewType, BrokerageType, ListedBy } from '../types';
-import { Sparkles, Upload, Loader2, CheckCircle, Home, X, AlertCircle, Trash2, Camera, FileText } from 'lucide-react';
+import { Sparkles, Upload, Loader2, CheckCircle, Home, X, AlertCircle, Camera, FileText, Dumbbell } from 'lucide-react';
 
 const PostProperty: React.FC = () => {
   const navigate = useNavigate();
@@ -56,12 +57,14 @@ const PostProperty: React.FC = () => {
     reraApproved: false,
     virtualShowcase: false,
     video3d: false,
-    amenitiesInput: '',
+    
+    // --- UPDATED: Amenities as Array ---
+    amenities: [] as string[],
     documents: [] as string[],
     
     // Price
     expectedPrice: '',
-    pricePerSqft: '', // Auto-calculated usually
+    pricePerSqft: '', 
     allInclusive: false,
     priceNegotiable: false,
     taxExcluded: false,
@@ -74,6 +77,14 @@ const PostProperty: React.FC = () => {
   // --- Constants ---
   const additionalRoomOpts = ['Pooja Room', 'Study Room', 'Servant Room', 'Others'];
   const viewOptions: ViewType[] = ['Road', 'Park', 'Corner'];
+  
+  // --- NEW: Amenity Options (Matching your Filters) ---
+  const amenityOptions = [
+    'Club House', 'Swimming Pool', 'Kids Play Area', 'Lift', 
+    'Power Backup', 'Gym', 'Vaastu Compliant', 'Security Personnel', 
+    'Gas Pipeline', 'Park', 'Intercom', 'Fire Safety'
+  ];
+
   const documentOptions = [
     'Sale Deed / Ownership Title', 'Society/Authority Transfer Letter', 'Occupancy Certificate (OC)',
     'Completion Certificate (CC)', 'Encumbrance Certificate (EC)', 'Property Tax Receipts',
@@ -92,7 +103,8 @@ const PostProperty: React.FC = () => {
     }
   };
 
-  const handleArrayToggle = (field: 'additionalRooms' | 'views' | 'documents', value: string) => {
+  // --- UPDATED: Handle Array Toggle for Amenities too ---
+  const handleArrayToggle = (field: 'additionalRooms' | 'views' | 'documents' | 'amenities', value: string) => {
     setFormData(prev => {
         const arr = prev[field] as string[];
         const newArr = arr.includes(value) 
@@ -106,11 +118,9 @@ const PostProperty: React.FC = () => {
     if (e.target.files) {
         const files = Array.from(e.target.files);
         if (imageFiles.length + files.length > 6) {
-            alert("You can only upload up to 6 images.");
+            toast.error("You can only upload up to 6 images.");
             return;
         }
-
-        // Fixed line to handle TypeScript 'File' type
         const newPreviews = files.map((file: File) => URL.createObjectURL(file));
         setImageFiles(prev => [...prev, ...files]);
         setPreviews(prev => [...prev, ...newPreviews]);
@@ -122,9 +132,7 @@ const PostProperty: React.FC = () => {
     setPreviews(prev => prev.filter((_, i) => i !== index));
   };
 
-  // --- Calculations ---
   useEffect(() => {
-    // Auto calculate Price Per Sqft if Price and Super Area exist
     if (formData.expectedPrice && formData.superBuiltUpArea) {
         const price = parseFloat(formData.expectedPrice);
         const area = parseFloat(formData.superBuiltUpArea);
@@ -137,48 +145,39 @@ const PostProperty: React.FC = () => {
   // --- Submit ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return navigate('/login');
+    if (!user) {
+        toast.error("Please login to post a property");
+        return navigate('/login');
+    }
+    
     setIsSubmitting(true);
     setError(null);
 
-    // Validation: At least one area
     if (!formData.carpetArea && !formData.builtUpArea && !formData.superBuiltUpArea) {
-        setError("At least one area type (Carpet, Built-up, or Super Built-up) is mandatory.");
+        const areaMsg = "At least one area type (Carpet, Built-up, or Super Built-up) is mandatory.";
+        setError(areaMsg);
+        toast.error(areaMsg);
         setIsSubmitting(false);
         return;
     }
 
     try {
-        // 1. Upload Images
         const imageUrls: string[] = [];
-        
-        // Upload loop
         for (const file of imageFiles) {
             const fileExt = file.name.split('.').pop();
             const fileName = `${user.id}/${Date.now()}-${Math.random()}.${fileExt}`;
-            
-            const { error: uploadErr } = await supabase.storage
-                .from('property-images')
-                .upload(fileName, file);
-            
+            const { error: uploadErr } = await supabase.storage.from('property-images').upload(fileName, file);
             if (uploadErr) throw uploadErr;
-
-            const { data: { publicUrl } } = supabase.storage
-                .from('property-images')
-                .getPublicUrl(fileName);
-            
+            const { data: { publicUrl } } = supabase.storage.from('property-images').getPublicUrl(fileName);
             imageUrls.push(publicUrl);
         }
 
-        // If no images, push a default
         if (imageUrls.length === 0) {
             imageUrls.push('https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1000&q=80');
         }
 
-        // 2. Determine Status (Auto-Approve for Admin/Broker)
         const initialStatus = (user.role === 'Admin' || user.role === 'Broker') ? 'Approved' : 'Pending';
 
-        // 3. Prepare DB Data
         const propertyPayload = {
             owner_id: user.id,
             title: formData.title || `${formData.bedrooms} BHK ${formData.propertyType} in ${formData.location}`,
@@ -188,21 +187,16 @@ const PostProperty: React.FC = () => {
             city: formData.city,
             type: formData.propertyType,
             listing_type: formData.listingType,
-            
-            images: imageUrls, // Array of strings
-            
+            images: imageUrls, 
             bedrooms: formData.bedrooms,
             bathrooms: formData.bathrooms,
             balconies: formData.balconies,
-            
             carpet_area: parseFloat(formData.carpetArea) || 0,
             built_up_area: parseFloat(formData.builtUpArea) || 0,
             super_built_up_area: parseFloat(formData.superBuiltUpArea) || 0,
-            area: parseFloat(formData.superBuiltUpArea || formData.builtUpArea || formData.carpetArea), // Primary sort area
-
+            area: parseFloat(formData.superBuiltUpArea || formData.builtUpArea || formData.carpetArea),
             additional_rooms: formData.additionalRooms,
             furnished_status: formData.furnishedStatus,
-            
             construction_status: formData.constructionStatus,
             year_built: parseInt(formData.yearBuilt) || new Date().getFullYear(),
             floor_no: parseInt(formData.floorNo) || 0,
@@ -211,56 +205,52 @@ const PostProperty: React.FC = () => {
             facing_exit: formData.facingExit,
             parking_type: formData.parkingType,
             views: formData.views,
-            
             rera_approved: formData.reraApproved,
             is_virtual_showcase: formData.virtualShowcase,
             is_3d_video: formData.video3d,
-            amenities: formData.amenitiesInput.split(',').map(s => s.trim()).filter(Boolean),
+            
+            // --- UPDATED: Direct Array Assignment ---
+            amenities: formData.amenities, 
             available_documents: formData.documents,
             
             price_per_sqft: parseFloat(formData.pricePerSqft) || 0,
             is_all_inclusive_price: formData.allInclusive,
             is_tax_excluded: formData.taxExcluded,
-            
             brokerage_type: formData.brokerageType,
             brokerage_amount: parseFloat(formData.brokerageAmount) || 0,
-            
-            status: initialStatus, // Use dynamic status
-            listed_by: user.role === 'Broker' ? 'Agent' : 'Owner' // Auto-set listed_by
+            status: initialStatus,
+            listed_by: user.role === 'Broker' ? 'Agent' : 'Owner'
         };
 
         const { error: dbError } = await supabase.from('properties').insert([propertyPayload]);
         if (dbError) throw dbError;
 
         if (initialStatus === 'Approved') {
-            alert("Property Posted Successfully! It is now Live.");
+            toast.success("Property Posted Successfully! It is now Live.");
         } else {
-            alert("Property Posted! It is pending Admin Approval.");
+            toast.success("Property Posted! It is pending Admin Approval.");
         }
-        
         navigate('/');
 
     } catch (err: any) {
         console.error(err);
-        setError(err.message || "Failed to upload property.");
+        const msg = err.message || "Failed to upload property.";
+        setError(msg);
+        toast.error(msg);
     } finally {
         setIsSubmitting(false);
     }
   };
 
-  // --- RENDER ---
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-5xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
-        
-        {/* Header */}
         <div className="bg-brand-green p-6 text-white text-center">
             <h1 className="text-3xl font-bold">Post Your Property</h1>
             <p className="opacity-90">Fill in the details to reach millions of buyers</p>
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-12">
-            
             {error && (
                 <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-2">
                     <AlertCircle size={20} /> {error}
@@ -270,7 +260,6 @@ const PostProperty: React.FC = () => {
             {/* SECTION 1: BASIC INFO */}
             <section className="space-y-6">
                 <h2 className="text-xl font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><Home size={20}/> Property Details</h2>
-                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">I want to</label>
@@ -296,7 +285,6 @@ const PostProperty: React.FC = () => {
                             {['Apartment', 'Villa', 'House', 'Builder Floor', 'Residential Land', 'Penthouse', '1 RK/Studio'].map(o => <option key={o} value={o}>{o}</option>)}
                         </select>
                     </div>
-                    {/* Listed By is auto-handled or user selected, we keep user selection as override or hide it if we want strict control */}
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Listed By</label>
                         <div className="flex gap-2">
@@ -323,9 +311,7 @@ const PostProperty: React.FC = () => {
             {/* SECTION 2: ROOM DETAILS */}
             <section className="space-y-6">
                 <h2 className="text-xl font-bold text-gray-800 border-b pb-2">Room Details</h2>
-                
                 <div className="space-y-4">
-                    {/* Bedrooms Pill */}
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Bedrooms</label>
                         <div className="flex flex-wrap gap-3">
@@ -337,8 +323,6 @@ const PostProperty: React.FC = () => {
                             ))}
                         </div>
                     </div>
-                    
-                    {/* Bathrooms Pill */}
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Bathrooms</label>
                         <div className="flex flex-wrap gap-3">
@@ -350,8 +334,6 @@ const PostProperty: React.FC = () => {
                             ))}
                         </div>
                     </div>
-                    
-                    {/* Balconies Pill */}
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Balconies</label>
                         <div className="flex flex-wrap gap-3">
@@ -383,8 +365,6 @@ const PostProperty: React.FC = () => {
                         <input type="number" name="superBuiltUpArea" value={formData.superBuiltUpArea} onChange={handleChange} className="w-full p-2.5 border rounded-lg" placeholder="e.g. 1650"/>
                     </div>
                 </div>
-                
-                {/* Other Rooms */}
                 <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Other Rooms (Optional)</label>
                     <div className="flex flex-wrap gap-3">
@@ -396,8 +376,6 @@ const PostProperty: React.FC = () => {
                         ))}
                     </div>
                 </div>
-
-                {/* Furnishing */}
                 <div>
                      <label className="block text-sm font-semibold text-gray-700 mb-2">Furnishing Status</label>
                      <div className="flex gap-4 max-w-lg">
@@ -415,7 +393,6 @@ const PostProperty: React.FC = () => {
             {/* SECTION 4: FEATURES & AMENITIES */}
             <section className="space-y-6">
                 <h2 className="text-xl font-bold text-gray-800 border-b pb-2">Features & Amenities</h2>
-                
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Construction Status</label>
@@ -462,7 +439,6 @@ const PostProperty: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Views & Media */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Views</label>
@@ -490,16 +466,31 @@ const PostProperty: React.FC = () => {
                          </label>
                     </div>
                 </div>
-
+                
+                {/* --- UPDATED AMENITIES SECTION --- */}
                 <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Other Amenities (Comma Separated)</label>
-                    <textarea name="amenitiesInput" value={formData.amenitiesInput} onChange={handleChange} rows={2} className="w-full p-2.5 border rounded-lg" placeholder="Gym, Swimming Pool, Club House..."></textarea>
+                    <label className="block text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                        <Dumbbell size={16} /> Amenities Available
+                    </label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {amenityOptions.map(item => (
+                            <label key={item} className="flex items-start gap-2 cursor-pointer p-2 hover:bg-gray-50 rounded border border-transparent hover:border-gray-200 transition-colors">
+                                <input 
+                                    type="checkbox" 
+                                    checked={formData.amenities.includes(item)} 
+                                    onChange={() => handleArrayToggle('amenities', item)}
+                                    className="mt-1 w-4 h-4 text-brand-green rounded border-gray-300"
+                                />
+                                <span className="text-sm text-gray-700">{item}</span>
+                            </label>
+                        ))}
+                    </div>
                 </div>
             </section>
 
              {/* SECTION 5: LEGAL DOCUMENTS */}
              <section className="space-y-6">
-                <h2 className="text-xl font-bold text-gray-800 border-b pb-2">Legal Documents Available</h2>
+                <h2 className="text-xl font-bold text-gray-800 border-b pb-2"><FileText size={20} className="inline mr-2"/>Legal Documents Available</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {documentOptions.map(doc => (
                         <label key={doc} className="flex items-start gap-2 cursor-pointer p-2 hover:bg-gray-50 rounded">
@@ -542,7 +533,6 @@ const PostProperty: React.FC = () => {
                     </label>
                 </div>
 
-                {/* Brokerage */}
                 <div className="pt-4 border-t border-gray-200">
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Do you charge brokerage?</label>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -591,7 +581,6 @@ const PostProperty: React.FC = () => {
                     placeholder="Describe your property in detail (e.g. nearby landmarks, reason for selling)..."></textarea>
             </section>
 
-            {/* Submit Button */}
             <div className="flex justify-end pt-6">
                 <button type="submit" disabled={isSubmitting} className="bg-brand-green text-white text-lg font-bold py-4 px-10 rounded-xl hover:bg-emerald-800 transition flex items-center gap-2 shadow-lg shadow-brand-green/20">
                     {isSubmitting ? <><Loader2 className="animate-spin"/> Publishing...</> : <><CheckCircle/> Post Property</>}
