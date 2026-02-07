@@ -1,12 +1,47 @@
-// ... imports remain the same
-import { supabase } from './supabaseClient'; // Make sure to import this!
+import React, { useState, useEffect } from 'react';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { supabase } from './supabaseClient';
+import { Property } from '../types';
+
+// Components
+import Navbar from './components/Navbar';
+import AdminLayout from './components/AdminLayout';
+
+// Context
+import { AuthProvider, useAuth } from './context/AuthContext';
+
+// Pages
+import Home from './pages/Home';
+import Listings from './pages/Listings';
+import PostProperty from './pages/PostProperty';
+import PropertyDetails from './pages/PropertyDetails';
+import FindAgent from './pages/FindAgent';
+import Settings from './pages/Settings';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
+
+// Admin Pages
+import AdminDashboard from './pages/admin/AdminDashboard';
+import PropertyManagement from './pages/admin/PropertyManagement';
+import UserManagement from './pages/admin/UserManagement';
+import AdminPeople from './pages/admin/AdminPeople';
+
+// --- Components for Route Protection ---
+
+const AdminRoute = ({ children }: { children: JSX.Element }) => {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="p-4">Checking access...</div>;
+  if (!user || user.role !== 'Admin') return <Navigate to="/" />;
+  return children;
+};
+
+// --- Main App Component ---
 
 const App: React.FC = () => {
-  // 1. Start with an empty array
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 2. Fetch from Supabase when App loads
+  // 1. Fetch properties from Supabase on load
   useEffect(() => {
     fetchProperties();
   }, []);
@@ -29,18 +64,18 @@ const App: React.FC = () => {
           location: p.location,
           city: p.city,
           type: p.type,
-          listingType: p.listing_type, // Notice the mapping!
+          listingType: p.listing_type, // Database column -> TS Property
           bedrooms: p.bedrooms,
           bathrooms: p.bathrooms,
           area: p.area,
-          imageUrl: p.image_url || 'https://via.placeholder.com/400', // Fallback image
+          imageUrl: p.image_url || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1073&q=80',
           amenities: p.amenities || [],
           ownerContact: p.owner_contact,
           datePosted: p.created_at,
           isFeatured: p.is_featured,
           status: p.status,
           ownerId: p.owner_id,
-          // Default values for fields we haven't added to DB yet to prevent crashes
+          // Safety defaults for optional fields
           superBuiltUpArea: p.area,
           builtUpArea: p.area,
           carpetArea: p.area,
@@ -61,17 +96,50 @@ const App: React.FC = () => {
   };
 
   const handleAddProperty = (newProperty: Property) => {
-    // This will be updated in the next step to push to DB
+    // We will update this in the next step to push to DB
     setProperties((prev) => [newProperty, ...prev]);
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center">Loading Kiwi Sqft...</div>;
+  if (loading) return <div className="h-screen flex items-center justify-center text-brand-green font-bold">Loading Kiwi Sqft...</div>;
 
   return (
     <AuthProvider>
       <Router>
-        {/* ... Rest of your JSX (Navbar, Routes, etc.) remains EXACTLY the same ... */}
+        <Navbar />
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<Home featuredProperties={properties.filter(p => p.isFeatured && p.status === 'Approved')} />} />
+          <Route path="/buy" element={<Listings properties={properties.filter(p => p.status === 'Approved')} type="sale" />} />
+          <Route path="/rent" element={<Listings properties={properties.filter(p => p.status === 'Approved')} type="rent" />} />
+          <Route path="/property/:id" element={<PropertyDetails properties={properties} />} />
+          
+          {/* Auth Routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          
+          {/* User Routes */}
+          <Route path="/sell" element={<PostProperty onAddProperty={handleAddProperty} isAdmin={false} />} />
+          <Route path="/find-agent" element={<FindAgent />} />
+          <Route path="/settings" element={<Settings />} />
+
+          {/* Admin Routes - Protected */}
+          <Route path="/admin" element={
+            <AdminRoute>
+              <AdminLayout />
+            </AdminRoute>
+          }>
+             <Route index element={<AdminDashboard properties={properties} />} />
+             <Route path="properties" element={<PropertyManagement properties={properties} setProperties={setProperties} />} />
+             <Route path="post-property" element={<PostProperty onAddProperty={handleAddProperty} isAdmin={true} />} />
+             <Route path="people" element={<UserManagement />} /> 
+             <Route path="leads" element={<AdminPeople />} />
+             <Route path="analytics" element={<AdminDashboard properties={properties} />} />
+             <Route path="settings" element={<Settings />} />
+          </Route>
+        </Routes>
       </Router>
     </AuthProvider>
   );
 };
+
+export default App;
