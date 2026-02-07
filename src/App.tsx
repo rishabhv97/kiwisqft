@@ -1,131 +1,77 @@
-import React, { useState } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Navbar from './components/Navbar';
-import AdminLayout from './components/AdminLayout';
-import Home from './pages/Home';
-import Listings from './pages/Listings';
-import PostProperty from './pages/PostProperty';
-import PropertyDetails from './pages/PropertyDetails';
-import FindAgent from './pages/FindAgent';
-import Settings from './pages/Settings';
-import Login from './pages/Login';   // Import Login
-import Signup from './pages/Signup'; // Import Signup
-
-// Admin Pages
-import AdminDashboard from './pages/admin/AdminDashboard';
-import PropertyManagement from './pages/admin/PropertyManagement';
-import UserManagement from './pages/admin/UserManagement';
-import AdminPeople from './pages/admin/AdminPeople'; 
-
-import { Property } from './types';
-import { AuthProvider, useAuth } from './context/AuthContext'; // Import Auth
-
-// Keep INITIAL_PROPERTIES for now (Phase 2 will remove this)
-const INITIAL_PROPERTIES: Property[] = [
-  // ... (Keep your long list of properties here, DO NOT DELETE THEM YET) ...
-   {
-    id: '1',
-    title: 'Luxury Villa with Private Pool',
-    description: 'Experience luxury living...',
-    price: 45000000,
-    location: 'Sector 150',
-    city: 'Noida',
-    type: 'Villa',
-    listingType: 'sale',
-    bedrooms: 4,
-    bathrooms: 5,
-    balconies: 3,
-    area: 3200,
-    superBuiltUpArea: 3200,
-    builtUpArea: 2800,
-    carpetArea: 2400,
-    imageUrl: 'https://images.unsplash.com/photo-1613490493576-7fde63acd811?ixlib=rb-4.0.3&auto=format&fit=crop&w=1771&q=80',
-    amenities: ['Swimming Pool', 'Club House', 'Smart Home', 'Security Personnel', 'Parking'],
-    ownerContact: '+91 98765 43210',
-    datePosted: '2023-10-15',
-    isFeatured: true,
-    constructionStatus: 'Ready to Move',
-    furnishedStatus: 'Fully Furnished',
-    listedBy: 'Agent',
-    ownershipType: 'Freehold',
-    facing: 'North-East',
-    exitFacing: 'South-West',
-    parkingSpaces: 2,
-    floor: 0,
-    totalFloors: 2,
-    reraApproved: true,
-    hasShowcase: true,
-    has3DVideo: true,
-    parkingType: 'Covered',
-    views: ['Park', 'Corner'],
-    yearBuilt: 2021,
-    additionalRooms: ['Servant Room', 'Study Room', 'Pooja Room'],
-    allInclusivePrice: true,
-    brokerageType: 'Fixed',
-    brokerageAmount: 100000,
-    documents: ['Sale Deed', 'Completion Certificate (CC)', 'Occupancy Certificate (OC)', 'Property Tax Receipts'],
-    isVerified: true,
-    status: 'Approved',
-    pageViews: 1250,
-    leads: 12,
-    ownerId: 'u2'
-  }
-];
-
-// Protected Route Component (Only allows Admins)
-const AdminRoute = ({ children }: { children: JSX.Element }) => {
-  const { user, loading } = useAuth();
-  if (loading) return <div>Loading...</div>;
-  if (!user || user.role !== 'Admin') return <Navigate to="/" />;
-  return children;
-};
+// ... imports remain the same
+import { supabase } from './supabaseClient'; // Make sure to import this!
 
 const App: React.FC = () => {
-  const [properties, setProperties] = useState<Property[]>(INITIAL_PROPERTIES);
+  // 1. Start with an empty array
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 2. Fetch from Supabase when App loads
+  useEffect(() => {
+    fetchProperties();
+  }, []);
+
+  const fetchProperties = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('properties')
+        .select('*');
+
+      if (error) throw error;
+
+      if (data) {
+        // Map Database columns (snake_case) to TypeScript (camelCase)
+        const mappedProperties: Property[] = data.map((p: any) => ({
+          id: p.id,
+          title: p.title,
+          description: p.description,
+          price: p.price,
+          location: p.location,
+          city: p.city,
+          type: p.type,
+          listingType: p.listing_type, // Notice the mapping!
+          bedrooms: p.bedrooms,
+          bathrooms: p.bathrooms,
+          area: p.area,
+          imageUrl: p.image_url || 'https://via.placeholder.com/400', // Fallback image
+          amenities: p.amenities || [],
+          ownerContact: p.owner_contact,
+          datePosted: p.created_at,
+          isFeatured: p.is_featured,
+          status: p.status,
+          ownerId: p.owner_id,
+          // Default values for fields we haven't added to DB yet to prevent crashes
+          superBuiltUpArea: p.area,
+          builtUpArea: p.area,
+          carpetArea: p.area,
+          balconies: 0,
+          totalFloors: 0,
+          floor: 0,
+          parkingSpaces: 0,
+          views: [],
+          documents: []
+        }));
+        setProperties(mappedProperties);
+      }
+    } catch (error) {
+      console.error("Error loading properties:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddProperty = (newProperty: Property) => {
+    // This will be updated in the next step to push to DB
     setProperties((prev) => [newProperty, ...prev]);
   };
+
+  if (loading) return <div className="h-screen flex items-center justify-center">Loading Kiwi Sqft...</div>;
 
   return (
     <AuthProvider>
       <Router>
-        <Navbar />
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<Home featuredProperties={properties.filter(p => p.isFeatured && p.status === 'Approved')} />} />
-          <Route path="/buy" element={<Listings properties={properties.filter(p => p.status === 'Approved')} type="sale" />} />
-          <Route path="/rent" element={<Listings properties={properties.filter(p => p.status === 'Approved')} type="rent" />} />
-          <Route path="/property/:id" element={<PropertyDetails properties={properties} />} />
-          
-          {/* Auth Routes */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          
-          {/* User Routes */}
-          <Route path="/sell" element={<PostProperty onAddProperty={handleAddProperty} isAdmin={false} />} />
-          <Route path="/find-agent" element={<FindAgent />} />
-          <Route path="/settings" element={<Settings />} />
-
-          {/* Admin Routes - Protected */}
-          <Route path="/admin" element={
-            <AdminRoute>
-              <AdminLayout />
-            </AdminRoute>
-          }>
-             <Route index element={<AdminDashboard properties={properties} />} />
-             <Route path="properties" element={<PropertyManagement properties={properties} setProperties={setProperties} />} />
-             <Route path="post-property" element={<PostProperty onAddProperty={handleAddProperty} isAdmin={true} />} />
-             {/* Note: We removed the 'users' prop below because we are moving to Supabase */}
-             <Route path="people" element={<UserManagement />} /> 
-             <Route path="leads" element={<AdminPeople />} />
-             <Route path="analytics" element={<AdminDashboard properties={properties} />} />
-             <Route path="settings" element={<Settings />} />
-          </Route>
-        </Routes>
+        {/* ... Rest of your JSX (Navbar, Routes, etc.) remains EXACTLY the same ... */}
       </Router>
     </AuthProvider>
   );
 };
-
-export default App;
