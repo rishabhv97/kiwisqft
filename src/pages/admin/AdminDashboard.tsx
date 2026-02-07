@@ -1,5 +1,5 @@
 import React from 'react';
-import { Property } from '../../../types';
+import { Property } from '../../types';
 import { TrendingUp, Users, CheckCircle, AlertCircle, DollarSign, FileText } from 'lucide-react';
 
 interface AdminDashboardProps {

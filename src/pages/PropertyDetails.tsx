@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Property } from '../../types';
+import { Property } from '../types';
 import { MapPin, BedDouble, Bath, Square, Calendar, Phone, Share2, Heart, CheckCircle2, UserCheck, Ruler, Building, Compass, Layers, Home, Info, ShieldCheck } from 'lucide-react';
 
 interface PropertyDetailsProps {

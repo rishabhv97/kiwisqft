@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Property, PropertyStatus } from '../../../types';
+import { Property, PropertyStatus } from '../../types';
 import { Check, X, Eye, Trash2, ShieldCheck, FileText, PlusCircle, AlertTriangle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 

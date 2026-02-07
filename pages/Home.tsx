@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Search, MapPin, ArrowRight, TrendingUp, Sparkles, ChevronRight, UserCheck, Phone, ShieldCheck, Home as HomeIcon } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import PropertyCard from '../components/PropertyCard';
-import { Property } from '../types';
+import { Property } from '../src/types';
 
 interface HomeProps {
   featuredProperties: Property[];

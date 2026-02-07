@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Property, ListingType, PropertyType, ConstructionStatus, ListedBy, FurnishedStatus, Facing, ViewType, ParkingType, OwnershipType } from '../types';
+import { Property, ListingType, PropertyType, ConstructionStatus, ListedBy, FurnishedStatus, Facing, ViewType, ParkingType, OwnershipType } from '../src/types';
 import PropertyCard from '../components/PropertyCard';
 import { Filter, SlidersHorizontal, MapPin, ChevronDown, ChevronUp, Check, Video, Car, Calculator, Save, Download, BedDouble, Bath, Home, Info, Layers, Building, Compass, FileText } from 'lucide-react';
 
