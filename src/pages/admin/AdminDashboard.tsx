@@ -1,41 +1,35 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../supabaseClient';
-import { Property } from '../../types';
 import { TrendingUp, Users, CheckCircle, AlertCircle, DollarSign, FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-interface AdminDashboardProps {
-  properties: Property[];
-}
-
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ properties }) => {
-  // Stats State
+const AdminDashboard: React.FC = () => {
   const [totalLeads, setTotalLeads] = useState(0);
   const [totalUsers, setTotalUsers] = useState(0);
+  const [propertyStats, setPropertyStats] = useState({ total: 0, active: 0, pending: 0, soldValue: 0 });
   const [loading, setLoading] = useState(true);
 
-  // 1. Calculate Property Stats from Props
-  const totalProperties = properties.length;
-  const verifiedProperties = properties.filter(p => p.status === 'Approved').length;
-  const pendingReview = properties.filter(p => p.status === 'Pending').length;
-  
-  // 2. Fetch Dynamic Data (Leads & Users)
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        // Fetch Leads Count
-        const { count: leadsCount, error: leadError } = await supabase
-          .from('leads')
-          .select('*', { count: 'exact', head: true });
-        
-        if (!leadError) setTotalLeads(leadsCount || 0);
+        // 1. Fetch Property Stats
+        const { data: props } = await supabase.from('properties').select('status, price');
+        if (props) {
+            setPropertyStats({
+                total: props.length,
+                active: props.filter(p => p.status === 'Approved').length,
+                pending: props.filter(p => p.status === 'Pending').length,
+                soldValue: props.filter(p => p.status === 'Sold').reduce((acc, curr) => acc + (curr.price || 0), 0)
+            });
+        }
 
-        // Fetch Users Count
-        const { count: usersCount, error: userError } = await supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true });
+        // 2. Fetch Leads Count
+        const { count: leadsCount } = await supabase.from('leads').select('*', { count: 'exact', head: true });
+        setTotalLeads(leadsCount || 0);
 
-        if (!userError) setTotalUsers(usersCount || 0);
+        // 3. Fetch Users Count
+        const { count: usersCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+        setTotalUsers(usersCount || 0);
 
       } catch (error) {
         console.error("Error fetching admin stats:", error);
@@ -46,15 +40,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ properties }) => {
 
     fetchStats();
   }, []);
-
-  // 3. Estimate Revenue (Mock Logic: 1% of all 'Sold' properties)
-  // Since we don't have 'Sold' status handling yet, we'll mock this part based on 'Approved' value
-  // In a real app, you'd query a 'transactions' table.
-  const soldPropertiesValue = properties
-    .filter(p => p.status === 'Sold')
-    .reduce((sum, p) => sum + (p.price || 0), 0);
-  
-  const estimatedRevenue = soldPropertiesValue * 0.01; // 1% Commission
 
   const formatCurrency = (val: number) => {
     if (val >= 10000000) return `₹ ${(val / 10000000).toFixed(2)} Cr`;
@@ -79,104 +64,53 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ properties }) => {
 
   return (
     <div className="space-y-6">
-      {/* 1. Overview Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
           title="Total Properties" 
-          value={totalProperties} 
-          subtext={`${pendingReview} Pending Review`} 
+          value={loading ? "..." : propertyStats.total} 
+          subtext={`${propertyStats.pending} Pending Review`} 
           icon={FileText} 
           color="bg-blue-500" 
         />
         <StatCard 
           title="Active Listings" 
-          value={verifiedProperties} 
-          subtext={`${totalProperties > 0 ? ((verifiedProperties/totalProperties)*100).toFixed(0) : 0}% Approval Rate`} 
+          value={loading ? "..." : propertyStats.active} 
+          subtext="Live on website" 
           icon={CheckCircle} 
           color="bg-brand-green" 
         />
         <StatCard 
           title="Total Leads" 
           value={loading ? "..." : totalLeads} 
-          subtext={<><span className="text-green-600 font-bold">Live</span> from Buyers</>} 
+          subtext="Buyer Enquiries" 
           icon={Users} 
           color="bg-purple-500" 
         />
         <StatCard 
           title="Est. Revenue" 
-          value={formatCurrency(estimatedRevenue)} 
+          value={loading ? "..." : formatCurrency(propertyStats.soldValue * 0.01)} 
           subtext="1% of Sold Volume" 
           icon={DollarSign} 
           color="bg-brand-brown" 
         />
       </div>
 
-      {/* 2. Pending Actions & Analytics Preview */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Pending Actions */}
+      {/* Quick Links */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
              <AlertCircle size={18} className="text-orange-500" /> Pending Actions
            </h3>
            <div className="space-y-4">
               <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-100">
-                 <span className="text-sm font-medium text-orange-800">{pendingReview} Properties pending review</span>
-                 <Link to="/admin/properties" className="text-xs font-bold bg-white text-orange-600 px-3 py-1 rounded border border-orange-200 hover:bg-orange-100">Review</Link>
+                 <span className="text-sm font-medium text-orange-800">{propertyStats.pending} Properties need approval</span>
+                 <Link to="/admin/properties" className="text-xs font-bold bg-white text-orange-600 px-3 py-1 rounded border border-orange-200">Review</Link>
               </div>
               <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-100">
-                 <span className="text-sm font-medium text-blue-800">{loading ? "..." : totalUsers} Registered Users</span>
-                 <Link to="/admin/people" className="text-xs font-bold bg-white text-blue-600 px-3 py-1 rounded border border-blue-200 hover:bg-blue-100">View</Link>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-                 <span className="text-sm font-medium text-gray-700">{totalLeads} Total Enquiries</span>
-                 <Link to="/admin/leads" className="text-xs font-bold bg-white text-gray-600 px-3 py-1 rounded border border-gray-300 hover:bg-gray-100">View</Link>
+                 <span className="text-sm font-medium text-blue-800">{totalUsers} Registered Users</span>
+                 <Link to="/admin/people" className="text-xs font-bold bg-white text-blue-600 px-3 py-1 rounded border border-blue-200">Manage</Link>
               </div>
            </div>
-        </div>
-
-        {/* Mini Analytics */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-            <div className="flex justify-between items-center mb-6">
-                <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                    <TrendingUp size={18} className="text-brand-green" /> Engagement Overview
-                </h3>
-                <select className="text-xs border-gray-200 rounded p-1 bg-gray-50">
-                    <option>Last 7 Days</option>
-                    <option>Last 30 Days</option>
-                </select>
-            </div>
-            
-            {/* Mock Chart Visualization using Flexbox bars (Visual only) */}
-            <div className="flex items-end justify-between h-40 gap-2 mb-4 px-2">
-                {[40, 65, 30, 80, 55, 90, 70].map((h, i) => (
-                    <div key={i} className="w-full bg-brand-lightGreen/50 rounded-t-lg relative group hover:bg-brand-green transition-colors" style={{height: `${h}%`}}>
-                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                            {h*12} Views
-                        </div>
-                    </div>
-                ))}
-            </div>
-            <div className="flex justify-between text-xs text-gray-400 px-2">
-                <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
-            </div>
-            <div className="mt-6 grid grid-cols-3 gap-4 text-center border-t border-gray-100 pt-4">
-                 <div>
-                    <p className="text-xs text-gray-500 uppercase">Property Views</p>
-                    {/* Sum of all 'pageViews' from properties if available, else 0 */}
-                    <p className="text-lg font-bold text-gray-800">{properties.reduce((sum, p) => sum + (p.pageViews || 0), 0)}</p>
-                 </div>
-                 <div>
-                    <p className="text-xs text-gray-500 uppercase">Enquiries</p>
-                    <p className="text-lg font-bold text-gray-800">{totalLeads}</p>
-                 </div>
-                 <div>
-                    <p className="text-xs text-gray-500 uppercase">Conversion</p>
-                    <p className="text-lg font-bold text-brand-green">
-                        {totalLeads > 0 ? ((totalLeads / (properties.reduce((sum, p) => sum + (p.pageViews || 0), 0) || 1)) * 100).toFixed(1) : 0}%
-                    </p>
-                 </div>
-            </div>
         </div>
       </div>
     </div>

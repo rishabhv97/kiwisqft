@@ -1,24 +1,77 @@
-import React, { useState } from 'react';
-import { supabase } from '../../supabaseClient'; // Import Supabase
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../supabaseClient';
 import { Property, PropertyStatus } from '../../types';
 import { Check, X, Eye, Trash2, ShieldCheck, FileText, PlusCircle, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
-interface PropertyManagementProps {
-  properties: Property[];
-  setProperties: React.Dispatch<React.SetStateAction<Property[]>>;
-}
-
-const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, setProperties }) => {
+// No props needed anymore
+const PropertyManagement: React.FC = () => {
   const navigate = useNavigate();
+  const [properties, setProperties] = useState<Property[]>([]); // Local state
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected' | 'Sold'>('All');
   const [selectedProp, setSelectedProp] = useState<Property | null>(null);
-  const [processingId, setProcessingId] = useState<string | null>(null); // To show loading state
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // --- 1. Fetch Data on Mount ---
+  useEffect(() => {
+    fetchProperties();
+  }, []);
+
+  const fetchProperties = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('properties')
+        .select('*')
+        .order('created_at', { ascending: false }); // Newest first
+
+      if (error) throw error;
+
+      if (data) {
+        // Map DB to Types
+        const mapped: Property[] = data.map((p: any) => ({
+            id: p.id,
+            title: p.title,
+            description: p.description || '', // Required field
+            price: p.price,
+            location: p.location,
+            city: p.city,
+            type: p.type,
+            listingType: p.listing_type, // Required field
+            status: p.status,
+            listedBy: p.listed_by,
+            ownerId: p.owner_id,
+            images: p.images || [],
+            
+            // Required Room Details
+            bedrooms: p.bedrooms || 0,
+            bathrooms: p.bathrooms || 0,
+            balconies: p.balconies || 0,
+            
+            // Required Area & Contact
+            area: p.area || 0,
+            amenities: p.amenities || [], // Required field
+            ownerContact: p.owner_contact || '', // Required field
+            
+            datePosted: p.created_at,
+            documents: p.available_documents || [],
+            isVerified: p.is_verified // Ensure this matches interface boolean
+        }));
+        setProperties(mapped);
+      }
+    } catch (err) {
+      console.error("Error fetching properties:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- Actions ---
 
   const handleStatusChange = async (id: string, newStatus: PropertyStatus, isVerified: boolean) => {
     setProcessingId(id);
     try {
-        // 1. Update Database
         const { error } = await supabase
             .from('properties')
             .update({ status: newStatus, is_verified: isVerified })
@@ -26,7 +79,6 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
 
         if (error) throw error;
 
-        // 2. Update UI
         setProperties(prev => prev.map(p => 
             p.id === id ? { ...p, status: newStatus, isVerified: isVerified } : p
         ));
@@ -43,22 +95,20 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this listing? This action cannot be undone.")) return;
+    if (!confirm("Are you sure? This cannot be undone.")) return;
     
     setProcessingId(id);
     try {
-      // 1. Delete from Database
       const { error } = await supabase.from('properties').delete().eq('id', id);
       if (error) throw error;
 
-      // 2. Update UI
       setProperties(prev => prev.filter(p => p.id !== id));
       if (selectedProp?.id === id) setSelectedProp(null);
       alert("Property deleted successfully.");
 
     } catch (err: any) {
       console.error("Error deleting property:", err);
-      alert("Failed to delete property. Check if it has related data.");
+      alert("Failed to delete. Check database policies.");
     } finally {
       setProcessingId(null);
     }
@@ -69,12 +119,14 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
     return p.status === filter;
   });
 
+  if (loading) return <div className="p-10 flex justify-center"><Loader2 className="animate-spin text-brand-brown" /></div>;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
            <h1 className="text-2xl font-bold text-gray-900">Property Management</h1>
-           <p className="text-gray-500 text-sm">Approve user listings or post new ones.</p>
+           <p className="text-gray-500 text-sm">Manage listings and approvals.</p>
         </div>
         <button 
           onClick={() => navigate('/admin/post-property')}
@@ -117,7 +169,7 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
                                         <img src={p.images?.[0] || 'https://via.placeholder.com/150'} alt="" className="w-12 h-12 rounded-lg object-cover" />
                                         <div>
                                             <p className="font-bold text-gray-900 line-clamp-1">{p.title}</p>
-                                            <p className="text-xs text-gray-500">ID: {p.id.slice(0,8)}... • ₹{p.price.toLocaleString()}</p>
+                                            <p className="text-xs text-gray-500">₹{p.price.toLocaleString()}</p>
                                         </div>
                                     </div>
                                 </td>
@@ -125,22 +177,17 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
                                     <span className={`px-2 py-1 rounded-full text-xs font-bold border ${
                                         p.status === 'Approved' ? 'bg-green-100 text-green-700 border-green-200' :
                                         p.status === 'Pending' ? 'bg-yellow-100 text-yellow-700 border-yellow-200' :
-                                        p.status === 'Rejected' ? 'bg-red-100 text-red-700 border-red-200' :
                                         'bg-gray-100 text-gray-700 border-gray-200'
                                     }`}>
                                         {p.status}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 text-xs text-gray-600">
-                                    {p.listedBy}
-                                    {p.ownerId === 'admin' && <span className="ml-1 text-brand-brown font-bold">(Admin)</span>}
-                                </td>
+                                <td className="px-6 py-4 text-xs text-gray-600">{p.listedBy}</td>
                                 <td className="px-6 py-4 text-right">
                                     <button 
                                         onClick={(e) => {e.stopPropagation(); handleDelete(p.id);}}
                                         disabled={processingId === p.id}
                                         className="p-2 rounded hover:bg-red-100 text-red-600 disabled:opacity-50" 
-                                        title="Delete"
                                     >
                                         {processingId === p.id ? <Loader2 size={16} className="animate-spin"/> : <Trash2 size={16} />}
                                     </button>
@@ -149,9 +196,7 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
                         ))}
                     </tbody>
                 </table>
-                {filteredProperties.length === 0 && (
-                  <div className="p-12 text-center text-gray-400">No properties found.</div>
-                )}
+                {filteredProperties.length === 0 && <div className="p-12 text-center text-gray-400">No properties found.</div>}
             </div>
         </div>
 
@@ -168,66 +213,29 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({ properties, set
                     <div className="mb-4">
                         <h3 className="font-bold text-gray-800 line-clamp-2">{selectedProp.title}</h3>
                         <p className="text-sm text-gray-500">{selectedProp.location}, {selectedProp.city}</p>
-                        <div className="flex gap-2 mt-2">
-                             <span className="text-xs bg-gray-100 px-2 py-1 rounded">{selectedProp.type}</span>
-                             <span className="text-xs bg-gray-100 px-2 py-1 rounded">{selectedProp.area} sqft</span>
-                        </div>
                     </div>
 
-                    {/* Verification Actions */}
                     <div className="space-y-3 pt-4 border-t border-gray-100">
-                        <h4 className="font-bold text-sm text-gray-800">Moderation</h4>
-                        
                         <div className="grid grid-cols-2 gap-3">
                             <button 
                                 onClick={() => handleStatusChange(selectedProp.id, 'Approved', true)}
-                                disabled={processingId === selectedProp.id}
-                                className={`py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 border transition-all ${
-                                    selectedProp.status === 'Approved' 
-                                    ? 'bg-green-600 text-white border-green-600' 
-                                    : 'bg-white text-green-600 border-green-200 hover:bg-green-50'
-                                }`}
+                                className="py-2 rounded-lg font-bold text-sm bg-green-600 text-white hover:bg-green-700"
                             >
-                                {processingId === selectedProp.id ? <Loader2 size={16} className="animate-spin"/> : <Check size={16} />} Approve
+                                Approve
                             </button>
-                            
                             <button 
                                 onClick={() => handleStatusChange(selectedProp.id, 'Rejected', false)}
-                                disabled={processingId === selectedProp.id}
-                                className={`py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 border transition-all ${
-                                    selectedProp.status === 'Rejected' 
-                                    ? 'bg-red-600 text-white border-red-600' 
-                                    : 'bg-white text-red-600 border-red-200 hover:bg-red-50'
-                                }`}
+                                className="py-2 rounded-lg font-bold text-sm bg-red-600 text-white hover:bg-red-700"
                             >
-                                {processingId === selectedProp.id ? <Loader2 size={16} className="animate-spin"/> : <X size={16} />} Reject
+                                Reject
                             </button>
                         </div>
-
-                        {selectedProp.status === 'Approved' && (
-                             <button 
-                                onClick={() => handleStatusChange(selectedProp.id, 'Sold', true)}
-                                className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg font-bold text-sm hover:bg-gray-200 border border-gray-200"
-                            >
-                                Mark as Sold
-                            </button>
-                        )}
-                        
                         <Link 
                             to={`/property/${selectedProp.id}`} target="_blank"
-                            className="w-full py-2 bg-brand-green/10 text-brand-green rounded-lg font-bold text-sm hover:bg-brand-green/20 flex items-center justify-center gap-2"
+                            className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg font-bold text-sm hover:bg-gray-200 flex items-center justify-center gap-2"
                         >
-                            <Eye size={16} /> Preview Listing
+                            <Eye size={16} /> Preview
                         </Link>
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t border-gray-100">
-                        <h4 className="font-bold text-sm text-gray-800 mb-2">Documents</h4>
-                        {selectedProp.documents && selectedProp.documents.length > 0 ? (
-                            <ul className="text-xs text-gray-600 space-y-1">
-                                {selectedProp.documents.map((d, i) => <li key={i} className="flex items-center gap-2"><FileText size={12}/> {d}</li>)}
-                            </ul>
-                        ) : <p className="text-xs text-gray-400 italic">No documents uploaded</p>}
                     </div>
                 </div>
             ) : (
