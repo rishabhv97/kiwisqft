@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { User as AppUser } from '../types'; // Import your custom type
+import { Navigate } from 'react-router-dom';
 
 interface AuthContextType {
   user: AppUser | null;
@@ -85,6 +86,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       )}
     </AuthContext.Provider>
   );
+};
+
+export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+  
+  if (loading) return <div>Loading...</div>;
+  
+  if (!user) {
+    // If not logged in, redirect to Login page
+    return <Navigate to="/login" replace />;
+  }
+
+  // If logged in, show the page
+  return <>{children}</>;
 };
 
 export const useAuth = () => {

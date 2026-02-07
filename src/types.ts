@@ -1,4 +1,3 @@
-
 export type PropertyType = 
   | 'Apartment' 
   | 'Villa' 
@@ -32,48 +31,55 @@ export interface Property {
   city: string;
   type: PropertyType;
   listingType: ListingType;
+  
+  // --- CHANGED: Support multiple images ---
+  images: string[]; 
+  
+  // Room Details
   bedrooms: number;
   bathrooms: number;
   balconies?: number; 
   
-  area: number; // usually super built-up
+  // Area Details
+  area: number; // Primary display area (usually Super Built-up)
   carpetArea?: number; 
   builtUpArea?: number; 
   superBuiltUpArea?: number; 
   
-  imageUrl: string;
+  // Amenities & Contact
   amenities: string[];
   ownerContact: string;
   isFeatured?: boolean;
   datePosted: string;
   
-  // Details
+  // Features
   constructionStatus?: ConstructionStatus;
   furnishedStatus?: FurnishedStatus;
   listedBy?: ListedBy;
   ownershipType?: OwnershipType;
   facing?: Facing; // Entry Facing
-  exitFacing?: Facing; // New: Exit Facing for Vaastu
+  exitFacing?: Facing; // Exit Facing for Vaastu
   floor?: number;
   totalFloors?: number;
   reraApproved?: boolean;
   parkingSpaces?: number;
   yearBuilt?: number;
   
-  // Rooms
+  // Extra Room Arrays
   additionalRooms?: string[]; 
   
   // Price Details
   priceNegotiable?: boolean; 
   allInclusivePrice?: boolean; 
   taxExcluded?: boolean; 
+  pricePerSqft?: number; // Added for calculation
   
   // Brokerage
   brokerageType?: BrokerageType; 
   brokerageAmount?: number; 
   brokerageNegotiable?: boolean; 
   
-  // Additional Buy Filters
+  // Media Flags
   hasShowcase?: boolean;
   has3DVideo?: boolean;
   parkingType?: ParkingType;
@@ -82,12 +88,12 @@ export interface Property {
   // Legal
   documents?: string[];
   
-  // Admin Fields
+  // Admin & System Fields
   isVerified?: boolean;
-  status?: PropertyStatus; // Default to Pending for users, Approved for Admin
+  status?: PropertyStatus; 
   pageViews?: number;
   leads?: number;
-  ownerId?: string; // Link to User ID
+  ownerId?: string; 
 }
 
 export interface FilterState {
@@ -132,7 +138,7 @@ export interface User {
   joinDate: string;
   isVerified: boolean;
   status: 'Active' | 'Inactive' | 'Suspended';
-  propertiesListed?: number; // Calculated field
-  companyName?: string; // For Brokers
-  licenseNumber?: string; // For Brokers
+  propertiesListed?: number;
+  companyName?: string;
+  licenseNumber?: string;
 }

@@ -8,7 +8,7 @@ import Navbar from './components/Navbar';
 import AdminLayout from './components/AdminLayout';
 
 // Context
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider, useAuth, ProtectedRoute } from './context/AuthContext';
 
 // Pages
 import Home from './pages/Home';
@@ -19,6 +19,7 @@ import FindAgent from './pages/FindAgent';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import UserDashboard from './pages/UserDashboard';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -41,7 +42,7 @@ const App: React.FC = () => {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 1. Fetch properties from Supabase on load
+  // 1. Fetch properties from Supabase on load (For Home & Admin)
   useEffect(() => {
     fetchProperties();
   }, []);
@@ -64,27 +65,56 @@ const App: React.FC = () => {
           location: p.location,
           city: p.city,
           type: p.type,
-          listingType: p.listing_type, // Database column -> TS Property
+          listingType: p.listing_type,
+          
+          // --- UPDATED: Handle Multiple Images ---
+          images: p.images || [], 
+          
           bedrooms: p.bedrooms,
           bathrooms: p.bathrooms,
+          balconies: p.balconies,
+          
+          // --- UPDATED: Handle Area Fields ---
           area: p.area,
-          imageUrl: p.image_url || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1073&q=80',
+          carpetArea: p.carpet_area,
+          builtUpArea: p.built_up_area,
+          superBuiltUpArea: p.super_built_up_area,
+          
           amenities: p.amenities || [],
           ownerContact: p.owner_contact,
           datePosted: p.created_at,
           isFeatured: p.is_featured,
           status: p.status,
           ownerId: p.owner_id,
-          // Safety defaults for optional fields
-          superBuiltUpArea: p.area,
-          builtUpArea: p.area,
-          carpetArea: p.area,
-          balconies: 0,
-          totalFloors: 0,
-          floor: 0,
-          parkingSpaces: 0,
-          views: [],
-          documents: []
+          
+          // --- UPDATED: Handle New Fields ---
+          constructionStatus: p.construction_status,
+          furnishedStatus: p.furnished_status,
+          listedBy: p.listed_by,
+          ownershipType: p.ownership_type,
+          facing: p.facing_entry,
+          exitFacing: p.facing_exit,
+          floor: p.floor_no,
+          totalFloors: p.total_floors,
+          parkingSpaces: p.parking_spaces,
+          yearBuilt: p.year_built,
+          
+          additionalRooms: p.additional_rooms || [],
+          views: p.views || [],
+          documents: p.available_documents || [],
+          
+          priceNegotiable: p.price_negotiable,
+          allInclusivePrice: p.is_all_inclusive_price,
+          taxExcluded: p.is_tax_excluded,
+          pricePerSqft: p.price_per_sqft,
+          
+          brokerageType: p.brokerage_type,
+          brokerageAmount: p.brokerage_amount,
+          
+          hasShowcase: p.is_virtual_showcase,
+          has3DVideo: p.is_3d_video,
+          reraApproved: p.rera_approved,
+          parkingType: p.parking_type
         }));
         setProperties(mappedProperties);
       }
@@ -95,11 +125,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAddProperty = (newProperty: Property) => {
-    // We will update this in the next step to push to DB
-    setProperties((prev) => [newProperty, ...prev]);
-  };
-
   if (loading) return <div className="h-screen flex items-center justify-center text-brand-green font-bold">Loading Kiwi Sqft...</div>;
 
   return (
@@ -108,19 +133,25 @@ const App: React.FC = () => {
         <Navbar />
         <Routes>
           {/* Public Routes */}
+          {/* Home still needs props because it renders Featured items immediately */}
           <Route path="/" element={<Home featuredProperties={properties.filter(p => p.isFeatured && p.status === 'Approved')} />} />
-          <Route path="/buy" element={<Listings properties={properties.filter(p => p.status === 'Approved')} type="sale" />} />
-          <Route path="/rent" element={<Listings properties={properties.filter(p => p.status === 'Approved')} type="rent" />} />
-          <Route path="/property/:id" element={<PropertyDetails properties={properties} />} />
+          
+          {/* Listings now fetch their own data, so we removed the 'properties' prop */}
+          <Route path="/buy" element={<Listings type="sale" />} />
+          <Route path="/rent" element={<Listings type="rent" />} />
+          
+          <Route path="/property/:id" element={<PropertyDetails />} />
           
           {/* Auth Routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           
           {/* User Routes */}
-          <Route path="/sell" element={<PostProperty onAddProperty={handleAddProperty} isAdmin={false} />} />
+          {/* PostProperty now handles everything internally, removed props */}
+          <Route path="/sell" element={<PostProperty />} />
           <Route path="/find-agent" element={<FindAgent />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/dashboard" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
 
           {/* Admin Routes - Protected */}
           <Route path="/admin" element={
@@ -130,7 +161,8 @@ const App: React.FC = () => {
           }>
              <Route index element={<AdminDashboard properties={properties} />} />
              <Route path="properties" element={<PropertyManagement properties={properties} setProperties={setProperties} />} />
-             <Route path="post-property" element={<PostProperty onAddProperty={handleAddProperty} isAdmin={true} />} />
+             {/* Admin version of PostProperty also doesn't need props now */}
+             <Route path="post-property" element={<PostProperty />} />
              <Route path="people" element={<UserManagement />} /> 
              <Route path="leads" element={<AdminPeople />} />
              <Route path="analytics" element={<AdminDashboard properties={properties} />} />
